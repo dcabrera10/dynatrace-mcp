@@ -1,8 +1,7 @@
 #!/usr/bin/env node
 import { EnvironmentInformationClient } from '@dynatrace-sdk/client-platform-management-service';
 import { isClientRequestError } from '@dynatrace-sdk/shared-errors';
-// Dynamically imported below (ESM-only package)
-// import { registerAppTool, registerAppResource, RESOURCE_MIME_TYPE } from '@modelcontextprotocol/ext-apps/server';
+import { registerAppTool, registerAppResource, RESOURCE_MIME_TYPE } from '@modelcontextprotocol/ext-apps/server';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
@@ -37,7 +36,7 @@ import {
   DAVIS_COPILOT_DOCS,
 } from './capabilities/davis-copilot';
 import { DynatraceEnv, getDynatraceEnv } from './getDynatraceEnv';
-import { createTelemetry, Telemetry } from './utils/telemetry-openkit';
+import { createTelemetry, Telemetry, AuthenticationType } from './utils/telemetry-openkit';
 import { getEntityTypeFromId } from './utils/dynatrace-entity-types';
 import { resetGrailBudgetTracker, getGrailBudgetTracker } from './utils/grail-budget-tracker';
 import { handleClientRequestError } from './utils/dynatrace-connection-utils';
@@ -100,14 +99,6 @@ const allRequiredScopes = scopesBase.concat([
 ]);
 
 const main = async () => {
-  // Dynamic import: @modelcontextprotocol/ext-apps is ESM-only and can't be require()'d.
-  const dynamicImport = new Function('specifier', 'return import(specifier)') as (
-    specifier: string,
-  ) => Promise<typeof import('@modelcontextprotocol/ext-apps/server')>;
-  const { registerAppTool, registerAppResource, RESOURCE_MIME_TYPE } = await dynamicImport(
-    '@modelcontextprotocol/ext-apps/server',
-  );
-
   console.error(`Initializing Dynatrace MCP Server v${getPackageJsonVersion()}...`);
 
   // Configure proxy from environment variables early in the startup process
@@ -132,8 +123,18 @@ const main = async () => {
     oauthClientId = DT_MCP_AUTH_CODE_FLOW_OAUTH_CLIENT_ID; // Default OAuth client ID for auth code flow
   }
 
+  // Determine authentication type for telemetry
+  let authType: AuthenticationType;
+  if (dtPlatformToken) {
+    authType = 'platform_token';
+  } else if (oauthClientId && oauthClientSecret) {
+    authType = 'oauth_client_credentials_flow';
+  } else {
+    authType = 'oauth_authorization_code_flow';
+  }
+
   // Parse environment information for telemetry
-  const environmentInfo = parseEnvironmentUrl(dtEnvironment);
+  const environmentInfo = { ...parseEnvironmentUrl(dtEnvironment), authType };
 
   // Initialize usage tracking
   const telemetry = createTelemetry(environmentInfo);
@@ -1586,6 +1587,8 @@ You can now execute new Grail queries (DQL, etc.) again. If this happens more of
     .option('--server', 'enable HTTP server mode (alias for --http)')
     .option('-p, --port <number>', 'port for HTTP server', '3000')
     .option('-H, --host <host>', 'host for HTTP server', '127.0.0.1')
+    .allowUnknownOption() // Claude Desktop / Electron UtilityProcess may inject extra arguments
+    .allowExcessArguments() // Avoid "too many arguments" when launched from .mcpb bundles
     .parse();
 
   const options = program.opts();
@@ -1675,7 +1678,7 @@ main().catch(async (error) => {
   console.error('Fatal error in main():', error);
   try {
     // report error in main - use unknown environment info since we might not have parsed it yet
-    const telemetry = createTelemetry({ environmentId: 'unknown', stage: 'unknown' });
+    const telemetry = createTelemetry({ environmentId: 'unknown', stage: 'unknown', authType: 'unknown' });
     await telemetry.trackError(error, 'main_error');
     await telemetry.shutdown();
   } catch (e) {

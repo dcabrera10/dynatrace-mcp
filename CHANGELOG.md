@@ -2,6 +2,30 @@
 
 ## Unreleased Changes
 
+- Updated `@dynatrace/strato-components` (1.17.0 → 3.1.1), `@dynatrace/strato-components-preview` (2.16.0 → 3.1.1), and `@dynatrace/strato-icons` (1.12.0 → 2.1.0). In strato v3, the preview components have been promoted to the stable package — all UI imports now use `@dynatrace/strato-components` directly.
+
+## 1.7.3
+
+- Fixed: Set default values (empty string) for several environment variables in Claude Desktop to avoid `${user_config.VARIABLE_NAME}` being set as a value
+
+## 1.7.2
+
+- Fixed: Empty string values for `OAUTH_CLIENT_ID`, `OAUTH_CLIENT_SECRET`, and `DT_PLATFORM_TOKEN` environment variables are now treated as unset, preventing authentication failures when tools like Claude Desktop set blank fields to `""`. A warning is logged when an empty string is detected.
+
+## 1.7.1
+
+- Fixed MCPB bundle file not working on Claude Desktop
+
+## 1.7.0
+
+- Added MCP-Bundle (`.mcpb`) for the Anthropics MCP Connectors marketplace, making the server directly installable from the marketplace.
+- Added `esbuild` to create a self-contained NPM package, improving install and startup time of the MCP server.
+
+## 1.6.1
+
+- Improved `execute_dql` MCP App UI styling using Strato design tokens, condensed table row density, and a refined toolbar layout.
+- Updated dependencies including `undici` (6.23.0 → 6.24.0).
+
 ## 1.6.0
 
 - Fixed an `"Already connected to a transport"` error in HTTP mode (`--http` flag) that caused all requests after the first concurrent connection to fail. Each incoming HTTP request now gets its own `McpServer` instance, matching the stateless server pattern recommended by the MCP SDK.
